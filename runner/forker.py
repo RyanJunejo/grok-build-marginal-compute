@@ -43,7 +43,11 @@ def append_jsonl(path, row):
         fcntl.flock(f, fcntl.LOCK_UN)
 
 
-def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns):
+def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns,
+                       branch_turns=None):
+    """branch_turns: disclosed variant — both branches get this equal budget
+    instead of the source's remaining budget; checkpoint ids get an @tN suffix
+    so conditions never mix in analysis."""
     existing = {r["checkpoint_id"] for r in read_jsonl(FORKS_JSONL)}
     checkpoints = []
     for row in source_rows:
@@ -57,7 +61,7 @@ def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns):
                 continue
             if st.get("stop_reason") == "end_turn":
                 continue
-            eligible.append((st, snaps[k], remaining))
+            eligible.append((st, snaps[k], branch_turns or remaining))
         rng = random.Random(f"{seed}:{row['task_id']}")
         sig = [e for e in eligible if e[0]["signal"]]
         quiet = [e for e in eligible if not e[0]["signal"]]
@@ -65,6 +69,8 @@ def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns):
                   rng.sample(quiet, min(max_quiet, len(quiet))))
         for st, snap, remaining in chosen:
             ck_id = f"{row['task_id']}__seg{st['segment']}__{row['run_id'].split('__')[-1]}"
+            if branch_turns:
+                ck_id += f"@t{branch_turns}"
             if ck_id in existing:
                 continue
             checkpoints.append({
@@ -128,6 +134,8 @@ def main():
     ap.add_argument("--segment-turns", type=int, default=8)
     ap.add_argument("--efforts", default="medium,xhigh")
     ap.add_argument("--source-run-ids", default=None, help="comma-list; default = all medium fork_source rows")
+    ap.add_argument("--branch-turns", type=int, default=None,
+                    help="equal branch budget override (disclosed variant; ids suffixed @tN)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -140,7 +148,8 @@ def main():
         sources = [r for r in sources if r["run_id"] in wanted]
 
     checkpoints = select_checkpoints(sources, args.max_signal, args.max_quiet,
-                                     args.seed, args.segment_turns)
+                                     args.seed, args.segment_turns,
+                                     branch_turns=args.branch_turns)
     n_sig = sum(1 for c in checkpoints if c["selected_as"] == "signal")
     print(f"{len(sources)} source runs -> {len(checkpoints)} new checkpoints "
           f"({n_sig} signal, {len(checkpoints) - n_sig} quiet)")
