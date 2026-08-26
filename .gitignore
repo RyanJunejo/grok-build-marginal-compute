@@ -12,3 +12,4 @@ toy*.json
 toy*.err
 *.tmp
 notes/
+results/overnight*.log

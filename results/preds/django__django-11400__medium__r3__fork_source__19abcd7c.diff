@@ -1,0 +1,32 @@
+diff --git a/django/contrib/admin/filters.py b/django/contrib/admin/filters.py
+index d65e01d5e2..77265b865b 100644
+--- a/django/contrib/admin/filters.py
++++ b/django/contrib/admin/filters.py
+@@ -194,10 +194,14 @@ class RelatedFieldListFilter(FieldListFilter):
+         return [self.lookup_kwarg, self.lookup_kwarg_isnull]
+ 
+     def field_choices(self, field, request, model_admin):
+-        ordering = ()
+-        related_admin = model_admin.admin_site._registry.get(field.remote_field.model)
++        other_model = get_model_from_relation(field)
++        related_admin = model_admin.admin_site._registry.get(other_model)
+         if related_admin is not None:
+             ordering = related_admin.get_ordering(request)
++            if not ordering:
++                ordering = other_model._meta.ordering
++        else:
++            ordering = other_model._meta.ordering
+         return field.get_choices(include_blank=False, ordering=ordering)
+ 
+     def choices(self, changelist):
+@@ -419,4 +423,9 @@ FieldListFilter.register(lambda f: True, AllValuesFieldListFilter)
+ class RelatedOnlyFieldListFilter(RelatedFieldListFilter):
+     def field_choices(self, field, request, model_admin):
+         pk_qs = model_admin.get_queryset(request).distinct().values_list('%s__pk' % self.field_path, flat=True)
+-        return field.get_choices(include_blank=False, limit_choices_to={'pk__in': pk_qs})
++        other_model = get_model_from_relation(field)
++        ordering = other_model._meta.ordering
++        related_admin = model_admin.admin_site._registry.get(other_model)
++        if related_admin is not None:
++            ordering = related_admin.get_ordering(request) or ordering
++        return field.get_choices(include_blank=False, limit_choices_to={'pk__in': pk_qs}, ordering=ordering)

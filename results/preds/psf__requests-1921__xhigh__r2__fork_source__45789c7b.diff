@@ -1,0 +1,29 @@
+diff --git a/requests/sessions.py b/requests/sessions.py
+index a023e4e..e1b4bf5 100644
+--- a/requests/sessions.py
++++ b/requests/sessions.py
+@@ -54,8 +54,8 @@ def merge_setting(request_setting, session_setting, dict_class=OrderedDict):
+     merged_setting = dict_class(to_key_val_list(session_setting))
+     merged_setting.update(to_key_val_list(request_setting))
+ 
+-    # Remove keys that are set to None.
+-    for (k, v) in request_setting.items():
++    # Remove keys that are set to None in either the request or the session.
++    for (k, v) in list(merged_setting.items()):
+         if v is None:
+             del merged_setting[k]
+ 
+diff --git a/requests/structures.py b/requests/structures.py
+index a175913..f1c7674 100644
+--- a/requests/structures.py
++++ b/requests/structures.py
+@@ -71,6 +71,9 @@ class CaseInsensitiveDict(collections.MutableMapping):
+     def __setitem__(self, key, value):
+         # Use the lowercased key for lookups, but store the actual
+         # key alongside the value.
++        if value is None:
++            self._store.pop(key.lower(), None)
++            return
+         self._store[key.lower()] = (key, value)
+ 
+     def __getitem__(self, key):
