@@ -243,8 +243,19 @@ def run_one(instance_id, effort, rep, phase, model, max_turns, segment_turns,
 
         if phase in ("static", "fork_branch"):
             seg_idx, prompt_source, session_flag, turns = segments[0]
-            timeout = timeout_static
-            run_segment(seg_idx, prompt_source, session_flag, turns, timeout)
+            out = run_segment(seg_idx, prompt_source, session_flag, turns, timeout_static)
+            if out is None and phase == "fork_branch" and row["status"] == "error":
+                # Transient empty-output failures observed when two branches
+                # fork the same parent session simultaneously (session-dir
+                # locks). Retry once with a fresh child session id.
+                row["status"] = "ok"
+                time.sleep(5)
+                session_flag = ["-r", resume_session["session_id"],
+                                "--fork-session", "-s", str(uuid.uuid4())]
+                out = run_segment(seg_idx + 1, prompt_source, session_flag, turns,
+                                  timeout_static)
+                if out is None and row["status"] == "ok":
+                    row["status"] = "error"
         else:  # fork_source: segment loop with snapshots
             sid = str(uuid.uuid4())
             max_segments = max(1, max_turns // segment_turns)

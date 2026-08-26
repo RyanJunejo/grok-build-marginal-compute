@@ -102,8 +102,8 @@ def main():
             continue
         if r.get("resolved") is not None and not args.regrade:
             continue
-        if r["status"].startswith("error") and not r.get("patch_path"):
-            continue
+        if r["status"] != "ok":
+            continue  # error rows are excluded from analysis, never graded
         (selected if r.get("patch_path") else empty).append(r)
 
     print(f"grading {len(selected)} runs with patches; {len(empty)} empty-patch runs -> resolved=False")
