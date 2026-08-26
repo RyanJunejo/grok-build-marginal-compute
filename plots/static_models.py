@@ -84,19 +84,34 @@ def main():
     errs = [[stats[m]["rate"] - (stats[m]["ci"][0] or stats[m]["rate"]) for m in labels],
             [(stats[m]["ci"][1] or stats[m]["rate"]) - stats[m]["rate"] for m in labels]]
     ax1.bar(range(len(labels)), rates, yerr=errs, capsize=4, color=colors)
-    ax1.set_xticks(range(len(labels)), labels, fontsize=8)
-    ax1.set_ylim(0, 1.05)
-    ax1.set_ylabel("verified solve rate")
-    ax1.set_title(f"SWE-bench Verified subset ({len(tasks)} tasks)")
     for i, m in enumerate(labels):
         s = stats[m]
-        ax2.scatter(s["cost"], s["rate"], s=90, color=colors[i], label=m)
+        ax1.text(i, min(s["rate"] + 0.07, 1.08), f"{s['rate']:.0%}\n${s['cost']:.2f}/task",
+                 ha="center", fontsize=9, fontweight="bold")
+    ax1.set_xticks(range(len(labels)), labels, fontsize=8)
+    ax1.set_ylim(0, 1.22)
+    ax1.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+    ax1.set_ylabel("verified solve rate")
+    ax1.set_title(f"SWE-bench Verified subset ({len(tasks)} tasks)", fontsize=10)
+    ax1.spines[["top", "right"]].set_visible(False)
+
+    offsets = {"grok-build-0.1": (10, -3), "grok-4.6": (-16, 9), "per-task-best*": (-20, -16)}
+    for i, m in enumerate(labels):
+        s = stats[m]
+        ax2.scatter(s["cost"], s["rate"], s=110, color=colors[i], zorder=3)
         ax2.annotate(m, (s["cost"], s["rate"]), textcoords="offset points",
-                     xytext=(8, -4), fontsize=8)
+                     xytext=offsets.get(m, (8, -4)), fontsize=9)
+    ax2.annotate("", xy=(stats["per-task-best*"]["cost"], stats["per-task-best*"]["rate"]),
+                 xytext=(stats["grok-4.6"]["cost"], stats["grok-4.6"]["rate"]),
+                 arrowprops=dict(arrowstyle="->", color="#999", lw=1.2))
+    ax2.text((stats["grok-4.6"]["cost"] + stats["per-task-best*"]["cost"]) / 2, 0.955,
+             "−30% cost,\nsame solve rate", ha="center", fontsize=8, color="#555")
     ax2.set_xlabel("mean $ / task")
     ax2.set_ylabel("verified solve rate")
-    ax2.set_ylim(0, 1.05)
-    ax2.set_title("solve rate vs dollar cost")
+    ax2.set_ylim(0.65, 1.06)
+    ax2.set_xlim(0.24, 0.56)
+    ax2.set_title("solve rate vs dollar cost", fontsize=10)
+    ax2.spines[["top", "right"]].set_visible(False)
     fig.suptitle("Task-level model allocation (single agent, 40-turn cap, effort constant)",
                  fontsize=10)
     fig.tight_layout()

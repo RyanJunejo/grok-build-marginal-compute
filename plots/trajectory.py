@@ -99,9 +99,12 @@ def main():
     fork_x = fork_seg * 8
     fork_y = ys[fork_seg]
     ax.axvline(fork_x, color="#888", ls=":", lw=1)
-    ax.annotate(f"fork @ turn {fork_x}\n({ck['selected_as']} state, "
-                f"streak={ck['state']['failure_streak']})",
-                (fork_x, fork_y), textcoords="offset points", xytext=(6, 26), fontsize=8)
+    trigger = ("failed verification" if ck["state"].get("last_test_failed")
+               else "repeat-edits without passing verification"
+               if ck["selected_as"] == "signal" else "no failure signal")
+    ax.annotate(f"fork @ turn {fork_x}\n{ck['selected_as']} state: {trigger}",
+                (fork_x, fork_y), textcoords="offset points", xytext=(-8, 40),
+                fontsize=8, ha="right")
 
     palette = ["#7aa6c2", "#c25e4c", "#8e7cc3", "#6aa84f"]
     arm_labels = list(ck["branch_run_ids"].keys())

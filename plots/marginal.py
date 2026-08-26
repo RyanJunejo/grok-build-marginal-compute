@@ -127,41 +127,69 @@ def main():
             line += f"  -> {prem / mean_d:,.0f} total tok per marginal solve"
         print(line)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+    fig, (ax1, ax2) = plt.subplots(
+        1, 2, figsize=(11.5, 4.8), gridspec_kw={"width_ratios": [1.5, 1]})
     groups = ["signal", "quiet"]
-    colors = {"signal": "#c25e4c", "quiet": "#7aa6c2"}
-    y = 0
-    labels = []
-    for grp in groups:
-        for r in [x for x in rows if x["group"] == grp]:
-            ax1.plot([r["p_med"], r["p_xh"]], [y, y], color=colors[grp], lw=1.5, zorder=1)
-            ax1.scatter([r["p_med"]], [y], marker="o", color="#666", zorder=2,
-                        label=a if y == 0 else None)
-            ax1.scatter([r["p_xh"]], [y], marker="D", color=colors[grp], zorder=2,
-                        label=b if y == 0 else None)
-            labels.append(f"{r['task_id'].split('__')[-1]} s{r['segment']} ({grp[0]})")
-            y += 1
-    ax1.set_yticks(range(len(labels)), labels, fontsize=7)
-    ax1.set_xlabel("P(verified solve)")
-    ax1.set_xlim(-0.05, 1.05)
-    ax1.set_title("paired branches per checkpoint")
-    ax1.legend(fontsize=7, loc="lower right")
+    group_color = {"signal": "#c0392b", "quiet": "#2e6f95"}
+    CONT, ESC = "#6d6d6d", "#e07b39"
 
-    xs, ds, errs, cols = [], [], [[], []], []
-    for i, grp in enumerate(g for g in groups if g in agg):
-        a = agg[grp]
-        xs.append(f"{grp}\n(n={a['n']})")
-        ds.append(a["delta"])
-        errs[0].append(a["delta"] - a["ci"][0])
-        errs[1].append(a["ci"][1] - a["delta"])
-        cols.append(colors[grp])
-    ax2.bar(xs, ds, yerr=errs, capsize=5, color=cols)
+    # --- left: dumbbells, grouped with headers, pairs visible even when equal
+    y = 0
+    yticks, ylabels = [], []
+    for grp in groups:
+        members = sorted((r for r in rows if r["group"] == grp),
+                         key=lambda r: (-r["delta"], r["task_id"]))
+        if not members:
+            continue
+        ax1.text(-0.02, y + 0.55, f"{grp.upper()} states", fontsize=8,
+                 fontweight="bold", color=group_color[grp], va="bottom")
+        for r in members:
+            ax1.plot([r["p_med"], r["p_xh"]], [y, y], color="#c9c9c9", lw=2, zorder=1)
+            # continue: large open circle; escalate: smaller filled diamond —
+            # both stay visible when the two probabilities are equal
+            ax1.scatter([r["p_med"]], [y], s=130, facecolors="white",
+                        edgecolors=CONT, linewidths=1.8, zorder=2)
+            ax1.scatter([r["p_xh"]], [y], s=55, marker="D", color=ESC, zorder=3)
+            ylabels.append(f"{r['task_id'].split('__')[-1]}  seg{r['segment']}")
+            yticks.append(y)
+            y -= 1
+        y -= 1.2  # gap between groups
+    ax1.set_yticks(yticks, ylabels, fontsize=8)
+    ax1.set_xlim(-0.06, 1.06)
+    ax1.set_xticks([0, 0.5, 1.0])
+    ax1.set_xlabel("P(verified solve)", fontsize=9)
+    ax1.set_title("per checkpoint (2 reps per arm)", fontsize=10)
+    ax1.scatter([], [], s=130, facecolors="white", edgecolors=CONT,
+                linewidths=1.8, label=f"{a} (base)")
+    ax1.scatter([], [], s=55, marker="D", color=ESC, label=f"{b} (grok-4.6)")
+    ax1.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.10),
+               ncol=2, frameon=False)
+    ax1.spines[["top", "right"]].set_visible(False)
+
+    # --- right: group means with CIs + the per-checkpoint deltas behind them
+    for i, grp in enumerate(groups):
+        if grp not in agg:
+            continue
+        g = agg[grp]
+        ax2.bar(i, g["delta"], width=0.55, color=group_color[grp], alpha=0.85, zorder=2)
+        ax2.errorbar(i, g["delta"],
+                     yerr=[[g["delta"] - g["ci"][0]], [g["ci"][1] - g["delta"]]],
+                     fmt="none", ecolor="#222", capsize=6, lw=1.5, zorder=4)
+        ax2.text(i, g["ci"][1] + 0.04, f"+{g['delta']:.2f}", ha="center",
+                 fontsize=11, fontweight="bold", color=group_color[grp])
+        pts = [r["delta"] for r in rows if r["group"] == grp]
+        ax2.scatter([i + 0.34] * len(pts), pts, s=28, color="#444", alpha=0.6, zorder=3)
     ax2.axhline(0, color="#999", lw=0.8)
-    ax2.set_ylabel(f"Δ P(solve)  =  {b} − {a}")
-    ax2.set_title("marginal value of escalation, by state")
-    fig.suptitle(f"Same trajectory prefix, same snapshot — only the {a}-vs-{b} arm differs",
-                 fontsize=10)
-    fig.tight_layout()
+    ax2.set_xticks([0, 1], [f"signal\n(n={agg.get('signal', {}).get('n', 0)})",
+                            f"quiet\n(n={agg.get('quiet', {}).get('n', 0)})"], fontsize=9)
+    ax2.set_ylim(-0.12, 1.02)
+    ax2.set_ylabel(f"Δ P(solve)  =  P({b}) − P({a})", fontsize=9)
+    ax2.set_title("group mean ± 95% CI  (dots: checkpoints)", fontsize=10)
+    ax2.spines[["top", "right"]].set_visible(False)
+
+    fig.suptitle(f"Fork the same frozen state, run two futures: {a} vs {b} — "
+                 "escalation never hurt, anywhere", fontsize=11)
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
     out = ROOT / "plots" / "marginal.png"
     fig.savefig(out, dpi=160)
     print(f"\nwrote {out}")

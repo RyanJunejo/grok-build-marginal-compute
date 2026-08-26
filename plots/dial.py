@@ -39,11 +39,12 @@ def main():
 
     colors = {"grok-build-0.1": "#c25e4c", "grok-4.20-0309-reasoning": "#8e7cc3",
               "grok-4.6": "#7aa6c2"}
+    jitter = {"grok-build-0.1": -0.13, "grok-4.20-0309-reasoning": 0.0, "grok-4.6": 0.13}
     for model, by_level in PROBES.items():
         xs, ys = [], []
         for i, lvl in enumerate(LEVELS):
             for v in by_level.get(lvl, []):
-                xs.append(i)
+                xs.append(i + jitter[model])
                 ys.append(v)
         ax1.plot(xs, ys, "o", color=colors[model], label=model, alpha=0.85, markersize=7)
     ax1.set_xticks(range(len(LEVELS)), LEVELS)
