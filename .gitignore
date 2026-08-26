@@ -1,0 +1,13 @@
+.env
+.venv/
+bin/grok-1.0.5-*
+results/sessions/
+results/events/
+results/grades/logs/
+results/grades/preds_*.jsonl
+__pycache__/
+*.pyc
+err_*.log
+toy*.json
+toy*.err
+*.tmp

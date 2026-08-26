@@ -1,0 +1,171 @@
+{
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "frozen_at": "2026-08-25",
+  "prompt_template_sha": "d17a7f24396e",
+  "first_wave": [
+    "django__django-10914",
+    "django__django-11400",
+    "django__django-11999",
+    "django__django-13590",
+    "psf__requests-1921",
+    "pytest-dev__pytest-6197",
+    "sphinx-doc__sphinx-8551",
+    "sympy__sympy-20590"
+  ],
+  "scale_pool": [
+    "astropy__astropy-14365",
+    "django__django-15128",
+    "matplotlib__matplotlib-23299",
+    "mwaskom__seaborn-3069",
+    "pallets__flask-5014",
+    "pydata__xarray-3993",
+    "pydata__xarray-4094",
+    "pylint-dev__pylint-4551",
+    "pytest-dev__pytest-5262",
+    "scikit-learn__scikit-learn-14894",
+    "sympy__sympy-13480",
+    "sympy__sympy-18199"
+  ],
+  "instances": {
+    "astropy__astropy-14365": {
+      "repo": "astropy/astropy",
+      "difficulty": "15 min - 1 hour",
+      "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14365:latest",
+      "base_commit": "7269fa3e33e8d02485a647da91a5a2a60a06af61",
+      "wave": "scale"
+    },
+    "django__django-10914": {
+      "repo": "django/django",
+      "difficulty": "<15 min fix",
+      "image": "swebench/sweb.eval.x86_64.django_1776_django-10914:latest",
+      "base_commit": "e7fd69d051eaa67cb17f172a39b57253e9cb831a",
+      "wave": "first"
+    },
+    "django__django-11400": {
+      "repo": "django/django",
+      "difficulty": "1-4 hours",
+      "image": "swebench/sweb.eval.x86_64.django_1776_django-11400:latest",
+      "base_commit": "1f8382d34d54061eddc41df6994e20ee38c60907",
+      "wave": "first"
+    },
+    "django__django-11999": {
+      "repo": "django/django",
+      "difficulty": "15 min - 1 hour",
+      "image": "swebench/sweb.eval.x86_64.django_1776_django-11999:latest",
+      "base_commit": "84633905273fc916e3d17883810d9969c03f73c2",
+      "wave": "first"
+    },
+    "django__django-13590": {
+      "repo": "django/django",
+      "difficulty": "15 min - 1 hour",
+      "image": "swebench/sweb.eval.x86_64.django_1776_django-13590:latest",
+      "base_commit": "755dbf39fcdc491fe9b588358303e259c7750be4",
+      "wave": "first"
+    },
+    "django__django-15128": {
+      "repo": "django/django",
+      "difficulty": "1-4 hours",
+      "image": "swebench/sweb.eval.x86_64.django_1776_django-15128:latest",
+      "base_commit": "cb383753c0e0eb52306e1024d32a782549c27e61",
+      "wave": "scale"
+    },
+    "matplotlib__matplotlib-23299": {
+      "repo": "matplotlib/matplotlib",
+      "difficulty": "15 min - 1 hour",
+      "image": "swebench/sweb.eval.x86_64.matplotlib_1776_matplotlib-23299:latest",
+      "base_commit": "3eadeacc06c9f2ddcdac6ae39819faa9fbee9e39",
+      "wave": "scale"
+    },
+    "mwaskom__seaborn-3069": {
+      "repo": "mwaskom/seaborn",
+      "difficulty": "15 min - 1 hour",
+      "image": "swebench/sweb.eval.x86_64.mwaskom_1776_seaborn-3069:latest",
+      "base_commit": "54cab15bdacfaa05a88fbc5502a5b322d99f148e",
+      "wave": "scale"
+    },
+    "pallets__flask-5014": {
+      "repo": "pallets/flask",
+      "difficulty": "<15 min fix",
+      "image": "swebench/sweb.eval.x86_64.pallets_1776_flask-5014:latest",
+      "base_commit": "7ee9ceb71e868944a46e1ff00b506772a53a4f1d",
+      "wave": "scale"
+    },
+    "psf__requests-1921": {
+      "repo": "psf/requests",
+      "difficulty": "<15 min fix",
+      "image": "swebench/sweb.eval.x86_64.psf_1776_requests-1921:latest",
+      "base_commit": "3c88e520da24ae6f736929a750876e7654accc3d",
+      "wave": "first"
+    },
+    "pydata__xarray-3993": {
+      "repo": "pydata/xarray",
+      "difficulty": "1-4 hours",
+      "image": "swebench/sweb.eval.x86_64.pydata_1776_xarray-3993:latest",
+      "base_commit": "8cc34cb412ba89ebca12fc84f76a9e452628f1bc",
+      "wave": "scale"
+    },
+    "pydata__xarray-4094": {
+      "repo": "pydata/xarray",
+      "difficulty": "<15 min fix",
+      "image": "swebench/sweb.eval.x86_64.pydata_1776_xarray-4094:latest",
+      "base_commit": "a64cf2d5476e7bbda099b34c40b7be1880dbd39a",
+      "wave": "scale"
+    },
+    "pylint-dev__pylint-4551": {
+      "repo": "pylint-dev/pylint",
+      "difficulty": "1-4 hours",
+      "image": "swebench/sweb.eval.x86_64.pylint-dev_1776_pylint-4551:latest",
+      "base_commit": "99589b08de8c5a2c6cc61e13a37420a868c80599",
+      "wave": "scale"
+    },
+    "pytest-dev__pytest-5262": {
+      "repo": "pytest-dev/pytest",
+      "difficulty": "<15 min fix",
+      "image": "swebench/sweb.eval.x86_64.pytest-dev_1776_pytest-5262:latest",
+      "base_commit": "58e6a09db49f34886ff13f3b7520dd0bcd7063cd",
+      "wave": "scale"
+    },
+    "pytest-dev__pytest-6197": {
+      "repo": "pytest-dev/pytest",
+      "difficulty": "1-4 hours",
+      "image": "swebench/sweb.eval.x86_64.pytest-dev_1776_pytest-6197:latest",
+      "base_commit": "e856638ba086fcf5bebf1bebea32d5cf78de87b4",
+      "wave": "first"
+    },
+    "scikit-learn__scikit-learn-14894": {
+      "repo": "scikit-learn/scikit-learn",
+      "difficulty": "15 min - 1 hour",
+      "image": "swebench/sweb.eval.x86_64.scikit-learn_1776_scikit-learn-14894:latest",
+      "base_commit": "fdbaa58acbead5a254f2e6d597dc1ab3b947f4c6",
+      "wave": "scale"
+    },
+    "sphinx-doc__sphinx-8551": {
+      "repo": "sphinx-doc/sphinx",
+      "difficulty": "15 min - 1 hour",
+      "image": "swebench/sweb.eval.x86_64.sphinx-doc_1776_sphinx-8551:latest",
+      "base_commit": "57ed10c68057c96491acbd3e62254ccfaf9e3861",
+      "wave": "first"
+    },
+    "sympy__sympy-13480": {
+      "repo": "sympy/sympy",
+      "difficulty": "<15 min fix",
+      "image": "swebench/sweb.eval.x86_64.sympy_1776_sympy-13480:latest",
+      "base_commit": "f57fe3f4b3f2cab225749e1b3b38ae1bf80b62f0",
+      "wave": "scale"
+    },
+    "sympy__sympy-18199": {
+      "repo": "sympy/sympy",
+      "difficulty": "1-4 hours",
+      "image": "swebench/sweb.eval.x86_64.sympy_1776_sympy-18199:latest",
+      "base_commit": "ba80d1e493f21431b4bf729b3e0452cd47eb9566",
+      "wave": "scale"
+    },
+    "sympy__sympy-20590": {
+      "repo": "sympy/sympy",
+      "difficulty": "15 min - 1 hour",
+      "image": "swebench/sweb.eval.x86_64.sympy_1776_sympy-20590:latest",
+      "base_commit": "cffd4e0f86fefd4802349a9f9b19ed70934ea354",
+      "wave": "first"
+    }
+  }
+}
