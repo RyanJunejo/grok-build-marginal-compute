@@ -229,7 +229,8 @@ def run_one(instance_id, effort, rep, phase, model, max_turns, segment_turns,
             if EFFORT_WARNING in r.stderr:
                 row["status"] = "error_effort"
             out = parse_grok_json(r.stdout)
-            if out is None:
+            if out is None or not out.get("sessionId"):
+                # empty or field-less JSON = not a real completion
                 row["status"] = "error"
                 return None
             row["session_id"] = row["session_id"] or out.get("sessionId")
