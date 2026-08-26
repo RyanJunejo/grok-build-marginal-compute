@@ -89,22 +89,27 @@ def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns,
     return checkpoints
 
 
-def run_branches(checkpoints, model, reps, parallel, efforts):
+def run_branches(checkpoints, arms, reps, parallel):
+    """arms: list of (label, model, effort) — the branch conditions. Only the
+    listed dimension may differ between arms; everything else is shared."""
+    for ck in checkpoints:
+        ck["branch_run_ids"] = {label: [] for label, _, _ in arms}
     jobs = []
     for idx, ck in enumerate(checkpoints):
-        order = efforts if idx % 2 == 0 else list(reversed(efforts))
+        order = arms if idx % 2 == 0 else list(reversed(arms))
         for rep in range(1, reps + 1):
-            for eff in order:
-                jobs.append((ck, eff, rep))
+            for arm in order:
+                jobs.append((ck, arm, rep))
 
-    def one(ck, eff, rep):
-        return ck, eff, run_one(
-            ck["task_id"], eff, rep, "fork_branch", model,
+    def one(ck, arm, rep):
+        label, model, effort = arm
+        return ck, label, run_one(
+            ck["task_id"], effort, rep, "fork_branch", model,
             ck["remaining_turns"], 8,
             snapshot=ck["snapshot_image"],
             resume_session={"session_id": ck["session_id"],
                             "host_grok_dir": ck["host_grok_dir"]},
-            branch=eff, checkpoint_id=ck["checkpoint_id"],
+            branch=label, checkpoint_id=ck["checkpoint_id"],
             tag_extra=f"__seg{ck['segment']}", layer="L3", snapshots=False,
         )
 
@@ -112,28 +117,38 @@ def run_branches(checkpoints, model, reps, parallel, efforts):
     with ThreadPoolExecutor(max_workers=parallel) as pool:
         futs = [pool.submit(one, *j) for j in jobs]
         for fut in as_completed(futs):
-            ck, eff, row = fut.result()
-            ck["branch_run_ids"][eff].append(row["run_id"])
+            ck, label, row = fut.result()
+            ck["branch_run_ids"][label].append(row["run_id"])
             done += 1
-            print(f"[{done}/{len(jobs)}] {ck['checkpoint_id']} {eff}: {row['status']} "
-                  f"stop={row['stop_reason']} turns={row['num_turns']} "
+            print(f"[{done}/{len(jobs)}] {ck['checkpoint_id']} {label}({row['model']}): "
+                  f"{row['status']} stop={row['stop_reason']} turns={row['num_turns']} "
                   f"${row['cost_usd']:.2f} patch={'yes' if row['patch_path'] else 'EMPTY'}")
 
     for ck in checkpoints:
         append_jsonl(FORKS_JSONL, ck)
 
 
+def parse_arms(spec):
+    """'continue=grok-build-0.1,escalate=grok-4.6' -> [(label, model, effort)]"""
+    arms = []
+    for part in spec.split(","):
+        label, model = part.split("=")
+        arms.append((label.strip(), model.strip(), "medium"))
+    return arms
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True)
+    ap.add_argument("--arms", default="continue=grok-build-0.1,escalate=grok-4.6",
+                    help="label=model pairs; the single manipulated variable")
     ap.add_argument("--reps", type=int, default=1)
     ap.add_argument("--max-signal", type=int, default=2)
     ap.add_argument("--max-quiet", type=int, default=1)
     ap.add_argument("--parallel", type=int, default=2)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--segment-turns", type=int, default=8)
-    ap.add_argument("--efforts", default="medium,xhigh")
     ap.add_argument("--source-run-ids", default=None, help="comma-list; default = all medium fork_source rows")
+    ap.add_argument("--source-rep", type=int, default=None, help="filter sources by rep")
     ap.add_argument("--branch-turns", type=int, default=None,
                     help="equal branch budget override (disclosed variant; ids suffixed @tN)")
     ap.add_argument("--dry-run", action="store_true")
@@ -146,6 +161,8 @@ def main():
     if args.source_run_ids:
         wanted = set(args.source_run_ids.split(","))
         sources = [r for r in sources if r["run_id"] in wanted]
+    if args.source_rep is not None:
+        sources = [r for r in sources if r["rep"] == args.source_rep]
 
     checkpoints = select_checkpoints(sources, args.max_signal, args.max_quiet,
                                      args.seed, args.segment_turns,
@@ -159,8 +176,7 @@ def main():
 
     if args.dry_run or not checkpoints:
         return
-    run_branches(checkpoints, args.model, args.reps, args.parallel,
-                 args.efforts.split(","))
+    run_branches(checkpoints, parse_arms(args.arms), args.reps, args.parallel)
 
 
 if __name__ == "__main__":

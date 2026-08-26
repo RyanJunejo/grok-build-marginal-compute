@@ -39,18 +39,21 @@ def otok(r):
 
 
 def pick_checkpoint(forks, runs):
-    chosen = None
+    """Prefer the checkpoint with the largest |Δ solve-rate| between its arms."""
+    best, best_gap = None, -1.0
     for ck in forks:
-        outcomes = {}
+        rates = []
         for eff, ids in ck["branch_run_ids"].items():
-            vals = [runs[i].get("resolved") for i in ids if i in runs]
+            vals = [runs[i].get("resolved") for i in ids
+                    if i in runs and runs[i]["status"] == "ok"]
             vals = [v for v in vals if v is not None]
             if vals:
-                outcomes[eff] = any(vals)
-        if len(outcomes) == 2 and outcomes["medium"] != outcomes["xhigh"]:
-            return ck, True
-        chosen = chosen or ck
-    return chosen, False
+                rates.append(sum(vals) / len(vals))
+        if len(rates) >= 2:
+            gap = max(rates) - min(rates)
+            if gap > best_gap:
+                best, best_gap = ck, gap
+    return best, best_gap > 0
 
 
 def main():
@@ -102,8 +105,10 @@ def main():
                 f"streak={ck['state']['failure_streak']})",
                 (fork_x, fork_y), textcoords="offset points", xytext=(6, 26), fontsize=8)
 
-    colors = {"medium": "#7aa6c2", "xhigh": "#c25e4c"}
-    for eff in ("medium", "xhigh"):
+    palette = ["#7aa6c2", "#c25e4c", "#8e7cc3", "#6aa84f"]
+    arm_labels = list(ck["branch_run_ids"].keys())
+    colors = {lab: palette[i % len(palette)] for i, lab in enumerate(arm_labels)}
+    for eff in arm_labels:
         for rid in ck["branch_run_ids"].get(eff, []):
             br = runs.get(rid)
             if not br:

@@ -50,10 +50,30 @@ def main():
     forks = read_jsonl(ROOT / "results" / "forks.jsonl")
     runs = {r["run_id"]: r for r in read_jsonl(ROOT / "results" / "runs.jsonl")}
 
+    # arm-pair priority: the model-escalation experiment, then the A/A effort study
+    PAIRS = [("continue", "escalate"), ("medium", "xhigh")]
+
+    import sys
+    want = None
+    if len(sys.argv) > 1:
+        want = tuple(sys.argv[1].split(","))
+    pair = None
+    for cand in ([want] if want else PAIRS):
+        if any(set(cand) <= set(ck["branch_run_ids"]) for ck in forks):
+            pair = cand
+            break
+    if pair is None:
+        print("no complete checkpoint pairs yet")
+        return
+    a, b = pair  # delta = P(b) - P(a)
+
     rows = []
     for ck in forks:
+        if not set(pair) <= set(ck["branch_run_ids"]):
+            continue
         per_eff = {}
-        for eff, ids in ck["branch_run_ids"].items():
+        for eff in pair:
+            ids = ck["branch_run_ids"][eff]
             branch_runs = [runs[i] for i in ids if i in runs
                            and runs[i]["status"] == "ok" and runs[i].get("resolved") is not None]
             if branch_runs:
@@ -61,25 +81,28 @@ def main():
                     "p": sum(bool(r["resolved"]) for r in branch_runs) / len(branch_runs),
                     "tok": sum(total_tokens(r) for r in branch_runs) / len(branch_runs),
                     "otok": sum(out_tokens(r) for r in branch_runs) / len(branch_runs),
+                    "cost": sum(r["cost_usd"] for r in branch_runs) / len(branch_runs),
                     "n": len(branch_runs),
                 }
-        if "medium" in per_eff and "xhigh" in per_eff:
+        if a in per_eff and b in per_eff:
             rows.append({
                 "checkpoint_id": ck["checkpoint_id"],
                 "task_id": ck["task_id"],
                 "group": ck["selected_as"],
                 "segment": ck["segment"],
                 "failure_streak": ck["state"].get("failure_streak"),
-                "p_med": per_eff["medium"]["p"], "p_xh": per_eff["xhigh"]["p"],
-                "delta": per_eff["xhigh"]["p"] - per_eff["medium"]["p"],
-                "tok_med": per_eff["medium"]["tok"], "tok_xh": per_eff["xhigh"]["tok"],
-                "otok_med": per_eff["medium"]["otok"], "otok_xh": per_eff["xhigh"]["otok"],
-                "n_med": per_eff["medium"]["n"], "n_xh": per_eff["xhigh"]["n"],
+                "p_med": per_eff[a]["p"], "p_xh": per_eff[b]["p"],
+                "delta": per_eff[b]["p"] - per_eff[a]["p"],
+                "tok_med": per_eff[a]["tok"], "tok_xh": per_eff[b]["tok"],
+                "otok_med": per_eff[a]["otok"], "otok_xh": per_eff[b]["otok"],
+                "cost_med": per_eff[a]["cost"], "cost_xh": per_eff[b]["cost"],
+                "n_med": per_eff[a]["n"], "n_xh": per_eff[b]["n"],
             })
 
     if not rows:
-        print("no complete checkpoint pairs yet")
+        print(f"no complete checkpoint pairs yet for {pair}")
         return
+    print(f"experiment arms: {a} vs {b} (delta = P({b}) - P({a}))\n")
 
     print(f"{'checkpoint':58s} {'grp':6s} {'P(med)':>6s} {'P(xh)':>6s} {'Δ':>6s} {'Δtok':>10s}")
     for r in sorted(rows, key=lambda x: (x["group"], x["checkpoint_id"])):
@@ -113,9 +136,9 @@ def main():
         for r in [x for x in rows if x["group"] == grp]:
             ax1.plot([r["p_med"], r["p_xh"]], [y, y], color=colors[grp], lw=1.5, zorder=1)
             ax1.scatter([r["p_med"]], [y], marker="o", color="#666", zorder=2,
-                        label="medium" if y == 0 else None)
+                        label=a if y == 0 else None)
             ax1.scatter([r["p_xh"]], [y], marker="D", color=colors[grp], zorder=2,
-                        label="xhigh" if y == 0 else None)
+                        label=b if y == 0 else None)
             labels.append(f"{r['task_id'].split('__')[-1]} s{r['segment']} ({grp[0]})")
             y += 1
     ax1.set_yticks(range(len(labels)), labels, fontsize=7)
@@ -134,9 +157,10 @@ def main():
         cols.append(colors[grp])
     ax2.bar(xs, ds, yerr=errs, capsize=5, color=cols)
     ax2.axhline(0, color="#999", lw=0.8)
-    ax2.set_ylabel("Δ P(solve)  =  xhigh − medium")
+    ax2.set_ylabel(f"Δ P(solve)  =  {b} − {a}")
     ax2.set_title("marginal value of escalation, by state")
-    fig.suptitle("Same trajectory prefix, same snapshot — only reasoning effort differs", fontsize=10)
+    fig.suptitle(f"Same trajectory prefix, same snapshot — only the {a}-vs-{b} arm differs",
+                 fontsize=10)
     fig.tight_layout()
     out = ROOT / "plots" / "marginal.png"
     fig.savefig(out, dpi=160)

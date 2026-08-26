@@ -11,3 +11,4 @@ err_*.log
 toy*.json
 toy*.err
 *.tmp
+notes/
