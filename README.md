@@ -1,88 +1,124 @@
-# Marginal Compute in a Production Agent Harness: Forked-Trajectory Measurements in Grok Build
+# When should a coding agent escalate to a bigger model?
 
-Modern agent harnesses expose increasingly large amounts of inference-time compute, but current
-allocation is primarily model-controlled or statically configured. This project measures, inside
-[Grok Build](https://github.com/xai-org/grok-build) (xAI's open-source coding-agent harness),
-what buying more compute at a *specific point in an agent trajectory* actually purchases — using
-a **paired counterfactual branch** design made possible by the harness's native session forking.
+**Forked-trajectory measurements of marginal compute in [Grok Build](https://github.com/xai-org/grok-build), on SWE-bench Verified.**
 
-It produced two results:
+Agent harnesses expose lots of test-time compute, but *when* to spend it is mostly guesswork.
+This repo measures one allocation decision directly: fork a live coding-agent trajectory at a
+matched checkpoint — identical filesystem, identical conversation, identical remaining budget —
+and let one branch **continue** on `grok-build-0.1` while the other **escalates** to `grok-4.6`.
+Grade both against SWE-bench's hidden tests. The difference is what escalation bought, *at that
+state*.
 
-## Result 1 — The harness's compute dial is silently disconnected
+- **Escalation raised P(solve) by ≈ +0.4 — and never lowered it at any checkpoint.**
+  Δsolve = +0.38 [0.00, +0.75] at failure-signal states, +0.39 [+0.11, +0.67] at quiet states
+  (13 checkpoints × 2 reps/arm, 50 graded branches).
+- **It rescues trajectories the base model can never finish.** django-11400 is 0/6 for
+  grok-build-0.1 from scratch; escalate branches solved it 2/2 even from a deep failure state.
+- **At quiet states, escalating was net *cheaper*:** mean token premium **−86k** — grok-4.6
+  finishes and stops while the base model burns its whole budget flailing.
+- **Rescuing a failing trajectory has a price: ≈ 347k total tokens per marginal solve** — and a
+  too-late boundary (with 8 turns of budget left, even grok-4.6 couldn't save it).
+- **Bonus finding:** the harness's own compute dial (`--effort`) is **silently inert for every
+  xAI-served model** — caught by an A/A control, receipts down to the source line in
+  **[docs/dial-finding.md](docs/dial-finding.md)**.
 
-The A/A control run for the original design (reasoning effort medium vs xhigh) caught that
-Grok Build 1.0.5's documented `--effort` flag is inert for **every** xAI-served model: the
-server-delivered catalog marks all models `supports_reasoning_effort: false`, the CLI drops the
-value with a tracing-only warning invisible in headless mode, `--effort banana` is accepted, and
-realized reasoning tokens do not respond to the flag (`none` ≈ `xhigh`). Full receipts — catalog
-dump, source-level root cause in `xai-grok-shell`, probe tables, and the resulting 8-task /
-17-checkpoint A/A dataset (identical 75%/75% resolution matrices; median reasoning ratio 0.96) —
-in **[docs/dial-finding.md](docs/dial-finding.md)**. The A/A forks double as the experiment's
-measured noise floor.
+![Marginal value of escalation by state](plots/marginal.png)
+*Paired branches from identical frozen states: escalating to grok-4.6 raised P(solve) at both
+signal and quiet checkpoints and never lowered it. Bootstrap CIs over checkpoints.*
 
-This is Prime Agent's thesis (arXiv 2608.23552) one level down: the capability surface
-advertises a knob; the wire discards it.
+## How the measurement works
 
-## Result 2 — The marginal value of model escalation, by trajectory state
+Every trajectory becomes its own control: run the base model in 8-turn segments, freeze the
+complete state at each boundary — the **filesystem** via `docker commit` and the **conversation**
+via a checkpoint session forked at that moment — then branch the same frozen state down two
+futures and grade both.
 
-With effort dead, the real escalation lever is the model. Design:
+1. **Sources.** Each SWE-bench Verified task runs on `grok-build-0.1` (single agent, subagents
+   disabled, 40-turn budget) in 8-turn segments, snapshotting at every boundary.
+2. **Checkpoints.** A mechanical rule over the session event stream labels each boundary a
+   **signal** state (latest verification execution — test run or repro script — failed, or
+   repeat-edits without a passing verification) or a **quiet** state, then picks up to 2 signal
+   + 1 quiet per source with seeded randomness, frozen before any outcome is seen.
+3. **Branches.** From each checkpoint's frozen state: **continue** (`grok-build-0.1`) vs
+   **escalate** (`grok-4.6`) — same transcript-up-to-k, same filesystem-at-k, same remaining
+   budget, same prompt; 2 repetitions per arm, execution order interleaved.
+4. **Grading.** Every branch is graded by the SWE-bench harness in fresh containers; hidden
+   tests are injected only at grade time. Estimand:
+   **Δ(state) = P(solve | state, escalate) − P(solve | state, continue)**.
 
-1. Run each SWE-bench Verified task on `grok-build-0.1` (single agent, no subagents, 40 turns)
-   in 8-turn segments, `docker commit`-ing the full container (repo + env) at every boundary.
-2. Select checkpoints by a pre-registered mechanical rule over the session event stream —
-   **signal** states (latest verification execution failed, or repeat-edits without a passing
-   verification) vs **quiet** states; seeded random choice among eligible candidates.
-3. **Checkpoint sessions are captured at segment time**: immediately after each snapshot, a
-   marker fork (`-r <sid> --fork-session -s <ckpt> --max-turns 1 --tools read_file`) freezes a
-   session whose transcript ends at that boundary plus one inert marker exchange (identical
-   across arms; mutating tools disabled during the marker; marker reply recorded per checkpoint). At each selected checkpoint, branches fork **that** frozen
-   session from the identical snapshot: **continue** on `grok-build-0.1` vs **escalate** to
-   `grok-4.6` — same transcript-up-to-k, same filesystem-at-k, same remaining budget, same
-   prompt; 2 repetitions per arm, execution order interleaved.
-4. Grade every branch with the SWE-bench harness (hidden tests injected at grade time in fresh
-   containers). Estimand: **Δ(state) = P(solve | state, escalate) − P(solve | state, continue)**,
-   with bootstrap CIs over checkpoints, split by state group, alongside the token/cost premium.
+> [!NOTE]
+> This is a paired counterfactual branch design with honest small-n reporting — not a
+> causal-inference or benchmark claim. Checkpoints nest within 8 source trajectories, so CIs
+> over checkpoints understate cluster correlation; the signal-vs-quiet *difference* is not
+> established (both ≈ +0.38); and "escalate mid-flight vs restart fresh on grok-4.6" is a
+> separate comparison this design does not measure.
 
-**Results** (13 checkpoints — 4 signal / 9 quiet — across 8 tasks, 2 reps/arm, 50 graded
-branches, all v2 design):
+## Results
 
-- **Escalation raised P(solve) by ≈ +0.4 and never lowered it at any checkpoint**:
-  Δsolve = **+0.38** [0.00, +0.75] at signal states (n=4) and **+0.39** [+0.11, +0.67] at quiet
-  states (n=9), bootstrap CIs over checkpoints.
-- **Mid-flight hand-off rescues trajectories the base model can never finish.** On
-  django-11400 (0/6 for grok-build-0.1 from scratch), escalate branches solved **2/2 from a
-  quiet state and 2/2 from a deep failure state** where continue went 0/2; pytest-6197
-  (also 0/6 from scratch) was rescued 2/2 from its mid-trajectory checkpoint. The exception:
-  its last checkpoint (8 turns of budget left) failed at both arms — escalating too late buys
-  nothing.
-- **The cost of escalation is two-sided.** At quiet states the mean token premium was
-  **−86k total tokens** — escalation *saved* tokens net, because grok-4.6 finishes and stops
-  while grok-build-0.1 burns its whole budget. At signal states the premium was +130k,
-  i.e. ≈ **347k total tokens per marginal verified solve** — the measured price of rescuing a
-  failing trajectory.
-- Task-level anchors: grok-build-0.1 74% @ $0.28/task (perfectly deterministic per task across
-  4-6 reps); grok-4.6 100% @ $0.51 (and *fewer* total tokens — 651k vs 944k — the premium is
-  price-per-token, not volume); per-task-best selection 100% @ $0.36 (−30% vs always-escalate).
+![One rescue, drawn](plots/trajectory_django__django-11400__seg4__e047d153.png)
+*One rescue: django-11400, forked at a deep failure state (turn 32). Both continue branches
+fail cheap; both escalate branches solve.*
 
-Caveats stated plainly: n is small; checkpoints nest within 8 source trajectories (up to 3 per
-trajectory), so CIs over checkpoints understate cluster correlation; signal-vs-quiet
-*difference* is not established (both ≈ +0.38); and "escalate mid-flight vs restart the task
-fresh on grok-4.6" is a separate comparison this design does not measure (grok-4.6 from scratch
-also solves these tasks — what the forks add is the state-conditioned, budget-matched
-measurement, including where escalation is too late).
+Task-level anchors (4–6 repetitions per task on the base model — with **zero within-task
+variance**: every task is 100% or 0% across all reps):
 
-See `plots/marginal.png` (Δ by state), `plots/trajectory_django__django-11400__seg4_*.png`
-(one rescue, drawn), and `plots/static_models.png` (task-level cost/solve + oracle gap).
+| arm | solve | $/task | total tok/task |
+|---|---|---|---|
+| all `grok-build-0.1` | 74% | $0.28 | 944k |
+| all `grok-4.6` | **100%** | $0.51 | **652k** |
+| per-task-best (oracle*) | 100% | **$0.36** | 921k |
 
-## Pinned configuration
+*Oracle selection conditions on observed outcomes — motivation, not a deployable policy.
+Note grok-4.6 uses **fewer** tokens than the base model (it finishes instead of hitting the
+turn cap); its premium is price-per-token, not volume.*
 
-| Component | Value |
+![Task-level cost/solve](plots/static_models.png)
+*The task-level frontier behind the fork experiment: the escalation decision is worth 30% of
+spend even before state-level allocation.*
+
+## The inert dial (the finding we didn't go looking for)
+
+The original design compared reasoning efforts. Its A/A control caught that Grok Build 1.0.5's
+documented `--effort` flag does nothing on any xAI-served model:
+
+- the server-delivered catalog marks **every** model `supports_reasoning_effort: false`, and the
+  CLI silently drops the flag (the warning goes to tracing, never headless stderr);
+- `--effort banana` is accepted without complaint;
+- realized reasoning does not respond: `none` ≈ `xhigh` on three models, and across the 8-task
+  suite the median per-task reasoning ratio between requested efforts is **0.96** — while task
+  identity moves reasoning **~12×**.
+
+![The dial is inert](plots/dial.png)
+*Left: same prompt, requested effort swept — flat. Right: task moves realized reasoning ~12×;
+the dial ~1×.*
+
+Full receipts — catalog dump, source-level root cause in `xai-grok-shell`, probe tables, and the
+A/A dataset — in **[docs/dial-finding.md](docs/dial-finding.md)**.
+
+## Design integrity: a flaw we caught and fixed
+
+The first fork design restored the filesystem to segment *k* but forked the parent session
+**after the run finished** — and Grok Build sessions are append-only, so those branches
+inherited the parent's *future*: a transcript describing all 40 turns, including (on solved
+tasks) the working solution. Branch solve rates were answer-key-inflated, and one "divergence"
+was a branch that read the transcript, declared the work done, and submitted nothing — onto a
+filesystem where the fix did not exist. We caught this by auditing transcript sizes (a
+"segment-3" child carried more history than its parent's full run), quarantined every v1 branch
+(`results/forks_v1_leaky.jsonl`, plus `design: v1_leaky` tags in `results/runs.jsonl`), and
+rebuilt around checkpoint sessions frozen at segment time. All clean records carry
+`"design": "v2_marker_fork"`. Task-level results and the dial finding involve no forking and
+were never affected.
+
+## Repo map
+
+| path | what |
 |---|---|
-| Grok Build | 1.0.5 (`bin/SHA256SUMS`) |
-| Models | `grok-build-0.1` (base) vs `grok-4.6` (escalation target); effort constant (and inert, see Result 1) |
-| Tasks | SWE-bench Verified subset, difficulty-stratified, frozen pre-run (`tasks/manifest.json`) |
-| Grading | `swebench==5.0.2`, fresh run-id per batch |
-| Host | Apple Silicon; amd64 eval images under Rosetta (wall time emulated; tokens/$ unaffected) |
+| `results/runs.jsonl` | every agent invocation: usage, cost, stop reason, patch, verdict |
+| `results/forks.jsonl` | checkpoints: state features, snapshot image, branch run ids |
+| `runner/` | container lifecycle, segmented sources, checkpoint forking, grading |
+| `plots/` | all figures + the scripts that regenerate them from the raw records |
+| `docs/dial-finding.md` | the inert-dial dossier |
+| `tasks/manifest.json` | the frozen, difficulty-stratified SWE-bench Verified subset |
 
 ## Reproduce
 
@@ -90,49 +126,45 @@ See `plots/marginal.png` (Δ by state), `plots/trajectory_django__django-11400__
 uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python swebench==5.0.2 datasets matplotlib
 echo 'XAI_API_KEY=...' > .env
 .venv/bin/python runner/select_subset.py                                  # manifest + prompts
-.venv/bin/python runner/sweep.py --model grok-build-0.1 --efforts medium  # segmented sources + snapshots
+.venv/bin/python runner/sweep.py --model grok-build-0.1 --efforts medium  # sources + snapshots ("L1" = task-level layer)
 .venv/bin/python runner/grade.py --layer L1
 .venv/bin/python runner/forker.py --arms "continue=grok-build-0.1,escalate=grok-4.6" --reps 2
 .venv/bin/python runner/grade.py --phase fork_branch
-.venv/bin/python plots/static.py && .venv/bin/python plots/marginal.py
+.venv/bin/python plots/static_models.py && .venv/bin/python plots/marginal.py
 ```
 
-Raw records ship in-repo: `results/runs.jsonl` (every headless invocation: usage, cost, stop
-reason, patch, verdict), `results/forks.jsonl` (checkpoints: state features, snapshot image,
-branch run ids). Session event streams under `results/sessions/` locally.
+> [!NOTE]
+> SWE-bench eval images are amd64-only. On Apple Silicon everything runs under Rosetta
+> emulation (wall-clock is inflated; tokens and dollars are unaffected). Total cost of the full
+> experiment as shipped: ≈ $65 of API spend.
 
-## Design integrity: a flaw we caught and fixed
-
-The first version of the fork design restored the filesystem to segment *k* but forked the
-parent session **after the run finished** — and Grok Build sessions are append-only, so those
-branches inherited the parent's *future*: a transcript describing all 40 turns, including (on
-solved tasks) the working solution. Branch solve rates were answer-key-inflated and one
-"divergence" was a branch that read the transcript, declared the work done, and submitted
-nothing — onto a filesystem where the fix did not exist. We caught this by auditing transcript
-sizes (a "segment-3" child carried more history than its parent's full run), quarantined every
-v1 branch (`results/forks_v1_leaky.jsonl`), and rebuilt the design around checkpoint sessions
-captured at segment time (the marker fork above). All v2 records carry
-`"design": "v2_marker_fork"`. Task-level results and the dial finding involve no forking and
-were never affected.
+| pinned | value |
+|---|---|
+| Grok Build | 1.0.5 (`bin/SHA256SUMS`) |
+| Models | `grok-build-0.1` (base) vs `grok-4.6` (escalation target); effort constant (and inert — see above) |
+| Grading | `swebench==5.0.2`, fresh run-id per batch |
 
 ## Validity notes
 
-- **One manipulated variable.** Branch arms differ only in model id; prompts, budgets, snapshots,
-  transcripts identical; subagents disabled everywhere. Every run row records its full flag set
-  and model for post-hoc verification.
-- **Paired design, honest language.** This is a paired counterfactual branch experiment with
-  repetitions — not a causal-inference claim, not a benchmark claim. n is reported everywhere;
-  the A/A dataset provides the empirical noise floor.
+- **One manipulated variable.** Branch arms differ only in model id; prompts, budgets,
+  snapshots, transcripts identical; subagents disabled everywhere; every run row records its
+  full flag set for post-hoc verification.
 - **Grader integrity.** Hidden FAIL_TO_PASS tests exist only at grade time; the eval script
   re-checkouts touched test files; the runner flags any test-path edits in diffs.
 - **Failure hygiene.** API/transport failures are `status=error` — excluded, never scored.
-  Completions are validated (sessionId present); results cache dodged via fresh grade run-ids.
-- **Observed-vs-documented CLI behavior** is recorded where it diverges (max-turns stop reports
-  `cancelled`; the effort warning never reaches headless stderr).
+  Completions are validated (session id present); a mechanical classifier (regression-tested in
+  `runner/test_features.py`) derives all state features; nothing is hand-annotated.
+- **Observed-vs-documented CLI behavior** is recorded wherever it diverges (max-turns stops
+  report `cancelled`; the effort warning never reaches headless stderr).
 
 ## Future work
 
-The fork dataset is the natural training set for a learned value-of-computation policy
-(P(solve|state, action) per unit cost); a threshold escalation rule falls out of the marginal
+The fork dataset is the natural training set for a learned value-of-computation policy —
+P(solve | state, action) per unit cost; a threshold escalation rule falls out of the marginal
 plot first. Verifying wire-level behavior of reasoning parameters against the xAI API directly
-(outside the CLI) is the open item from Result 1.
+(outside the CLI) is the open item from the dial finding.
+
+Motivated by [Prime Agent](https://arxiv.org/abs/2608.23552) (Karten et al., 2026): harnesses
+are computation managers, and models struggle to operate the compute they expose. This repo
+measures that gap twice — once in a knob that turned out not to be connected, once in an
+allocation decision worth +0.4 solve probability.

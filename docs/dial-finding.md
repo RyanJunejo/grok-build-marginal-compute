@@ -52,6 +52,10 @@ Same prompt (a small combinatorics puzzle), reasoning tokens from the headless `
 `--effort none` produces as much reasoning as `--effort xhigh`. Note the non-zero reasoning under
 `none` — the flag isn't scaling anything down either.
 
+![Requested effort vs realized reasoning](../plots/dial.png)
+*Left: the probe table plotted. Right: on the 8-task agentic suite, task identity moves realized
+reasoning ~12×; the requested effort ~1×.*
+
 **5. The agentic-scale consequence: an accidental A/A study.**
 Before discovering this, we ran a full paired comparison on 8 SWE-bench Verified tasks
 ("medium" vs "xhigh", 40-turn budgets, single agent, identical prompts). As expected for two
@@ -63,7 +67,8 @@ dial-inelastic.
 (A companion set of 17 mid-trajectory fork checkpoints also showed aggregate Δ = 0.00 between
 the two labels; those runs were additionally subject to a fork-design flaw we later found and
 fixed — see the repository README's design-integrity note — so we cite only the task-level A/A
-numbers here.)
+numbers here. The per-arm A/A table and figure regenerate via `plots/static.py` →
+`plots/static.png`.)
 
 ## What we cannot assert
 
