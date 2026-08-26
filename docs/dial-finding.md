@@ -54,14 +54,16 @@ Same prompt (a small combinatorics puzzle), reasoning tokens from the headless `
 
 **5. The agentic-scale consequence: an accidental A/A study.**
 Before discovering this, we ran a full paired comparison on 8 SWE-bench Verified tasks
-("medium" vs "xhigh", 40-turn budgets, single agent, identical prompts) plus 17 mid-trajectory
-fork checkpoints with paired continuations. As expected for two samples of the *same*
-configuration: identical per-task resolution matrices (75% vs 75%), median per-task
-reasoning-token ratio 0.96 (range 0.52–1.47 — pure task-to-task variance), aggregate
-Δsolve = 0.00 across all checkpoints. Two checkpoints showed arm differences (e.g. one branch
-quit after 2 turns with an empty patch while its three siblings solved) — which, being
-same-config runs, measure the **per-state sampling variance** of trajectory outcomes. We keep
-this data as the experiment's noise-floor calibration.
+("medium" vs "xhigh", 40-turn budgets, single agent, identical prompts). As expected for two
+samples of the *same* configuration: identical per-task resolution matrices (75% vs 75%) and a
+median per-task reasoning-token ratio of 0.96 (range 0.52–1.47 — pure task-to-task variance).
+Realized reasoning is strongly task-elastic (8.5k–109k tokens across tasks) and completely
+dial-inelastic.
+
+(A companion set of 17 mid-trajectory fork checkpoints also showed aggregate Δ = 0.00 between
+the two labels; those runs were additionally subject to a fork-design flaw we later found and
+fixed — see the repository README's design-integrity note — so we cite only the task-level A/A
+numbers here.)
 
 ## What we cannot assert
 

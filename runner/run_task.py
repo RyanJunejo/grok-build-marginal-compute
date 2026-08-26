@@ -284,16 +284,39 @@ def run_one(instance_id, effort, rep, phase, model, max_turns, segment_turns,
                     break
                 if snapshots:
                     tag = f"snap_{run_id.split('__')[-1]}:seg{k}"
+                    committed = False
                     for attempt in (1, 2):
                         try:
                             ctr.commit(tag)
                             row["snapshots"].append({"segment": k, "image": tag})
+                            committed = True
                             break
                         except subprocess.CalledProcessError:
                             if attempt == 2:  # snapshot lost; run stays valid for L1
                                 row["usage_flags"].append(f"seg{k}_snapshot_failed")
                             else:
                                 time.sleep(10)
+                if snapshots and committed:
+                    # v2 checkpoint session: fork NOW so the checkpoint's
+                    # transcript ends at this boundary. Forking the live parent
+                    # later would inherit the parent's FUTURE turns (the v1
+                    # design flaw): sessions are append-only and --fork-session
+                    # copies the whole history at fork time.
+                    ckpt_sid = str(uuid.uuid4())
+                    marker = ctr.grok(
+                        grok_headless_args(
+                            effort, model, 1,
+                            ["-r", sid, "--fork-session", "-s", ckpt_sid],
+                            ["-p", "Checkpoint marker. Reply with exactly: OK"],
+                        ),
+                        timeout=600,
+                    )
+                    mk = parse_grok_json(marker.stdout)
+                    if mk and mk.get("sessionId"):
+                        row["snapshots"][-1]["ckpt_session"] = ckpt_sid
+                    else:
+                        row["snapshots"][-1]["ckpt_session"] = None
+                        row["usage_flags"].append(f"seg{k}_ckpt_fork_failed")
                 # Observed on 1.0.5: a --max-turns stop reports stopReason
                 # "cancelled" (not the documented "max_turn_requests"); both
                 # mean "budget exhausted, keep segmenting".

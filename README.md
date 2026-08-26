@@ -32,10 +32,12 @@ With effort dead, the real escalation lever is the model. Design:
 2. Select checkpoints by a pre-registered mechanical rule over the session event stream —
    **signal** states (latest verification execution failed, or repeat-edits without a passing
    verification) vs **quiet** states; seeded random choice among eligible candidates.
-3. At each checkpoint, fork the session (`-r <sid> --fork-session`) from the identical snapshot
-   into paired branches: **continue** on `grok-build-0.1` vs **escalate** to `grok-4.6` — same
-   transcript, same filesystem, same remaining budget, same prompt; 2 repetitions per arm,
-   execution order interleaved.
+3. **Checkpoint sessions are captured at segment time**: immediately after each snapshot, a
+   marker fork (`-r <sid> --fork-session -s <ckpt> --max-turns 1`) freezes a session whose
+   transcript ends at that boundary. At each selected checkpoint, branches fork **that** frozen
+   session from the identical snapshot: **continue** on `grok-build-0.1` vs **escalate** to
+   `grok-4.6` — same transcript-up-to-k, same filesystem-at-k, same remaining budget, same
+   prompt; 2 repetitions per arm, execution order interleaved.
 4. Grade every branch with the SWE-bench harness (hidden tests injected at grade time in fresh
    containers). Estimand: **Δ(state) = P(solve | state, escalate) − P(solve | state, continue)**,
    with bootstrap CIs over checkpoints, split by state group, alongside the token/cost premium.
@@ -70,6 +72,20 @@ echo 'XAI_API_KEY=...' > .env
 Raw records ship in-repo: `results/runs.jsonl` (every headless invocation: usage, cost, stop
 reason, patch, verdict), `results/forks.jsonl` (checkpoints: state features, snapshot image,
 branch run ids). Session event streams under `results/sessions/` locally.
+
+## Design integrity: a flaw we caught and fixed
+
+The first version of the fork design restored the filesystem to segment *k* but forked the
+parent session **after the run finished** — and Grok Build sessions are append-only, so those
+branches inherited the parent's *future*: a transcript describing all 40 turns, including (on
+solved tasks) the working solution. Branch solve rates were answer-key-inflated and one
+"divergence" was a branch that read the transcript, declared the work done, and submitted
+nothing — onto a filesystem where the fix did not exist. We caught this by auditing transcript
+sizes (a "segment-3" child carried more history than its parent's full run), quarantined every
+v1 branch (`results/forks_v1_leaky.jsonl`), and rebuilt the design around checkpoint sessions
+captured at segment time (the marker fork above). All v2 records carry
+`"design": "v2_marker_fork"`. Task-level results and the dial finding involve no forking and
+were never affected.
 
 ## Validity notes
 

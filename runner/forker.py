@@ -52,12 +52,16 @@ def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns,
     checkpoints = []
     for row in source_rows:
         states = features.state_at_segments(row)
-        snaps = {s["segment"]: s["image"] for s in row.get("snapshots", [])}
+        snaps = {s["segment"]: s for s in row.get("snapshots", [])}
         eligible = []
         for st in states:
             k = st["segment"]
             remaining = TOTAL_TURNS - segment_turns * k
             if k not in snaps or remaining <= 0:
+                continue
+            # v2 design: a checkpoint needs a marker-forked session captured at
+            # this boundary; forking the live parent later leaks its future.
+            if not snaps[k].get("ckpt_session"):
                 continue
             if st.get("stop_reason") == "end_turn":
                 continue
@@ -75,9 +79,11 @@ def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns,
                 continue
             checkpoints.append({
                 "checkpoint_id": ck_id,
+                "design": "v2_marker_fork",
                 "task_id": row["task_id"],
                 "source_run_id": row["run_id"],
-                "session_id": row["session_id"],
+                "session_id": snap["ckpt_session"],  # transcript ends at this boundary
+                "source_session_id": row["session_id"],
                 "host_grok_dir": row["host_grok_dir"],
                 "segment": st["segment"],
                 "snapshot_image": snap,
