@@ -31,6 +31,13 @@ def load_l1():
             and r["status"] == "ok" and r.get("resolved") is not None]
 
 
+def arm_of(r):
+    """Group arm. Effort proved inert (docs/dial-finding.md), so the real
+    task-level arm is the model; the medium/xhigh split is kept only for the
+    A/A appendix (see --by-effort)."""
+    return r["model"]
+
+
 def out_tokens(r):
     u = r.get("usage", {})
     return (u.get("output_tokens") or 0) + (u.get("reasoning_tokens") or 0)
