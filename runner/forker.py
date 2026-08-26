@@ -88,11 +88,10 @@ def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns,
                 "source_session_id": row["session_id"],
                 "host_grok_dir": row["host_grok_dir"],
                 "segment": st["segment"],
-                "snapshot_image": snap,
                 "remaining_turns": remaining,
                 "selected_as": "signal" if st["signal"] else "quiet",
                 "state": st,
-                "branch_run_ids": {"medium": [], "xhigh": []},
+                "branch_run_ids": {},  # filled per-arm by run_branches
             })
     return checkpoints
 
