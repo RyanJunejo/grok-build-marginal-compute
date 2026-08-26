@@ -28,6 +28,13 @@ FAIL_TEXT_RE = re.compile(
 )
 PASS_TEXT_RE = re.compile(r"(\b\d+\s+passed\b|(?<![A-Za-z])OK(?![A-Za-z])|\bPASSED\b)")
 SHELL_NAMES = {"run_terminal_command", "run_terminal_cmd", "terminal", "shell", "bash"}
+# Only commands that EXECUTE code can bear a verification outcome. Read-only
+# commands (git log/show/diff, grep, cat, ls, find) routinely print words like
+# "FAILED"/"error" from history or file contents — those are not verifications.
+EXEC_CMD_RE = re.compile(
+    r"\b(python[0-9.]*\s|pytest|py\.test|unittest|tox\b|runtests\.py|manage\.py|"
+    r"make\b|npm\b|pip\s+install|bash\s+\S+\.sh|sh\s+\S+\.sh|\./[\w./-]+)"
+)
 EDIT_NAME_RE = re.compile(r"(search_replace|edit|write|create_file|apply_patch|str_replace|delete)", re.I)
 
 
@@ -108,6 +115,7 @@ def extract_events(updates_path, upto_bytes=None):
         kind = call.get("kind")
         failed_status = u.get("status") == "failed"
         is_shell = kind == "execute" or name in SHELL_NAMES
+        is_exec = is_shell and bool(command and EXEC_CMD_RE.search(command))
         is_edit = (kind == "edit") or (
             not call.get("read_only", True) and not is_shell and path is not None
             and bool(EDIT_NAME_RE.search(name))
@@ -118,21 +126,28 @@ def extract_events(updates_path, upto_bytes=None):
             "tool": name,
             "status": u.get("status"),
             "is_shell": is_shell,
+            "is_exec": is_exec,
             "is_edit": is_edit,
             "edit_path": path if is_edit else None,
             "command": command if is_shell else None,
             "is_test_run": is_test,
-            "saw_fail": (failed_status or bool(FAIL_TEXT_RE.search(text))) if is_shell else False,
+            "saw_fail": ((failed_status and is_exec) or bool(FAIL_TEXT_RE.search(text)))
+                        if is_shell else False,
             "saw_pass": bool(PASS_TEXT_RE.search(text)) if is_shell else False,
         })
     return events
 
 
 def _is_verification(ev):
-    """Outcome-bearing execution: a formal test command, or any shell command
-    whose output shows pass/fail evidence (agents often verify with `python -c`
-    repro scripts rather than the test suite — a failing repro is the signal)."""
-    return ev["is_test_run"] or (ev["is_shell"] and (ev["saw_fail"] or ev["saw_pass"]))
+    """Outcome-bearing execution: a formal test command, or a code-EXECUTING
+    shell command whose output shows pass/fail evidence (agents often verify
+    with `python -c` repro scripts rather than the test suite — a failing repro
+    is the signal). Read-only commands (git log, grep, cat, ...) are excluded:
+    their output quoting 'FAILED'/'error' is history, not an outcome
+    (regression-tested in runner/test_features.py)."""
+    if ev["is_test_run"]:
+        return True
+    return (ev["is_shell"] and ev.get("is_exec") and (ev["saw_fail"] or ev["saw_pass"]))
 
 
 def _summarize(events):

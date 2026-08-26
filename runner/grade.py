@@ -28,13 +28,24 @@ def read_runs():
     return [json.loads(l) for l in RUNS_JSONL.read_text().splitlines() if l.strip()]
 
 
-def write_runs(rows):
-    tmp = RUNS_JSONL.with_suffix(".tmp")
-    with open(tmp, "w") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+def merge_verdicts(verdicts):
+    """Read-modify-write runs.jsonl under the SAME lock append_run_row uses,
+    so a concurrently appended row can never be lost."""
+    with open(RUNS_JSONL, "a") as lockf:
+        fcntl.flock(lockf, fcntl.LOCK_EX)
+        rows = read_runs()
         for r in rows:
-            f.write(json.dumps(r) + "\n")
-    os.replace(tmp, RUNS_JSONL)
+            if r["run_id"] in verdicts:
+                resolved, grade_run_id = verdicts[r["run_id"]]
+                if resolved is not None:
+                    r["resolved"] = resolved
+                r["grade_run_id"] = grade_run_id
+        tmp = RUNS_JSONL.with_suffix(".tmp")
+        with open(tmp, "w") as f:
+            for r in rows:
+                f.write(json.dumps(r) + "\n")
+        os.replace(tmp, RUNS_JSONL)
+        fcntl.flock(lockf, fcntl.LOCK_UN)
 
 
 def batch_unique_by_instance(rows):
@@ -114,14 +125,7 @@ def main():
     for r in empty:
         verdicts[r["run_id"]] = (False, "empty-patch")
 
-    rows = read_runs()  # re-read: sweep may have appended while grading
-    for r in rows:
-        if r["run_id"] in verdicts:
-            resolved, grade_run_id = verdicts[r["run_id"]]
-            if resolved is not None:
-                r["resolved"] = resolved
-            r["grade_run_id"] = grade_run_id
-    write_runs(rows)
+    merge_verdicts(verdicts)
 
     graded = [v for v, _ in verdicts.values() if v is not None]
     print(f"graded {len(graded)}: {sum(1 for v in graded if v)} resolved, "

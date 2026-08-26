@@ -54,9 +54,10 @@ def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns,
         states = features.state_at_segments(row)
         snaps = {s["segment"]: s for s in row.get("snapshots", [])}
         eligible = []
+        source_total = row.get("max_turns") or TOTAL_TURNS
         for st in states:
             k = st["segment"]
-            remaining = TOTAL_TURNS - segment_turns * k
+            remaining = source_total - segment_turns * k
             if k not in snaps or remaining <= 0:
                 continue
             # v2 design: a checkpoint needs a marker-forked session captured at
@@ -82,7 +83,8 @@ def select_checkpoints(source_rows, max_signal, max_quiet, seed, segment_turns,
                 "design": "v2_marker_fork",
                 "task_id": row["task_id"],
                 "source_run_id": row["run_id"],
-                "session_id": snap["ckpt_session"],  # transcript ends at this boundary
+                "snapshot_image": snap["image"],
+                "session_id": snap["ckpt_session"],  # transcript frozen at this boundary
                 "source_session_id": row["session_id"],
                 "host_grok_dir": row["host_grok_dir"],
                 "segment": st["segment"],
@@ -100,6 +102,9 @@ def run_branches(checkpoints, arms, reps, parallel):
     listed dimension may differ between arms; everything else is shared."""
     for ck in checkpoints:
         ck["branch_run_ids"] = {label: [] for label, _, _ in arms}
+        # persist BEFORE branches launch: a crash mid-campaign must not lose
+        # the checkpoint metadata (state features, signal/quiet, snapshot).
+        append_jsonl(FORKS_JSONL, ck)
     jobs = []
     for idx, ck in enumerate(checkpoints):
         order = arms if idx % 2 == 0 else list(reversed(arms))
@@ -119,6 +124,19 @@ def run_branches(checkpoints, arms, reps, parallel):
             tag_extra=f"__seg{ck['segment']}", layer="L3", snapshots=False,
         )
 
+    def flush_branch_ids():
+        """Rewrite forks.jsonl rows for these checkpoints with current ids."""
+        allrows = read_jsonl(FORKS_JSONL)
+        by_id = {c["checkpoint_id"]: c for c in checkpoints}
+        with open(FORKS_JSONL, "a") as lockf:
+            fcntl.flock(lockf, fcntl.LOCK_EX)
+            tmp = str(FORKS_JSONL) + ".tmp"
+            with open(tmp, "w") as f:
+                for c in allrows:
+                    f.write(json.dumps(by_id.get(c["checkpoint_id"], c)) + "\n")
+            Path(tmp).rename(FORKS_JSONL)
+            fcntl.flock(lockf, fcntl.LOCK_UN)
+
     done = 0
     with ThreadPoolExecutor(max_workers=parallel) as pool:
         futs = [pool.submit(one, *j) for j in jobs]
@@ -129,9 +147,7 @@ def run_branches(checkpoints, arms, reps, parallel):
             print(f"[{done}/{len(jobs)}] {ck['checkpoint_id']} {label}({row['model']}): "
                   f"{row['status']} stop={row['stop_reason']} turns={row['num_turns']} "
                   f"${row['cost_usd']:.2f} patch={'yes' if row['patch_path'] else 'EMPTY'}")
-
-    for ck in checkpoints:
-        append_jsonl(FORKS_JSONL, ck)
+            flush_branch_ids()  # incremental: ids survive any crash
 
 
 def parse_arms(spec):
@@ -165,8 +181,14 @@ def main():
                if r["phase"] == "fork_source" and r["status"] == "ok"
                and r.get("snapshots") and r.get("session_id")]
     if args.source_run_ids:
+        # explicit selection bypasses the default layer/model guards
         wanted = set(args.source_run_ids.split(","))
         sources = [r for r in sources if r["run_id"] in wanted]
+    else:
+        # default guards: real experiment sources only — the base model, the
+        # L1 layer (excludes smoke/canary runs), full-budget runs
+        sources = [r for r in sources
+                   if r.get("layer") == "L1" and r.get("model") == "grok-build-0.1"]
     if args.source_rep is not None:
         sources = [r for r in sources if r["rep"] == args.source_rep]
 

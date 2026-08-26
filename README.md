@@ -33,8 +33,9 @@ With effort dead, the real escalation lever is the model. Design:
    **signal** states (latest verification execution failed, or repeat-edits without a passing
    verification) vs **quiet** states; seeded random choice among eligible candidates.
 3. **Checkpoint sessions are captured at segment time**: immediately after each snapshot, a
-   marker fork (`-r <sid> --fork-session -s <ckpt> --max-turns 1`) freezes a session whose
-   transcript ends at that boundary. At each selected checkpoint, branches fork **that** frozen
+   marker fork (`-r <sid> --fork-session -s <ckpt> --max-turns 1 --tools read_file`) freezes a
+   session whose transcript ends at that boundary plus one inert marker exchange (identical
+   across arms; mutating tools disabled during the marker; marker reply recorded per checkpoint). At each selected checkpoint, branches fork **that** frozen
    session from the identical snapshot: **continue** on `grok-build-0.1` vs **escalate** to
    `grok-4.6` — same transcript-up-to-k, same filesystem-at-k, same remaining budget, same
    prompt; 2 repetitions per arm, execution order interleaved.
@@ -90,7 +91,8 @@ were never affected.
 ## Validity notes
 
 - **One manipulated variable.** Branch arms differ only in model id; prompts, budgets, snapshots,
-  transcripts identical; subagents disabled everywhere; runner asserts it.
+  transcripts identical; subagents disabled everywhere. Every run row records its full flag set
+  and model for post-hoc verification.
 - **Paired design, honest language.** This is a paired counterfactual branch experiment with
   repetitions — not a causal-inference claim, not a benchmark claim. n is reported everywhere;
   the A/A dataset provides the empirical noise floor.

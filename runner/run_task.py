@@ -62,6 +62,7 @@ def append_run_row(row):
     with open(RUNS_JSONL, "a") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.write(json.dumps(row) + "\n")
+        f.flush()  # must land before the lock releases
         fcntl.flock(f, fcntl.LOCK_UN)
 
 
@@ -245,10 +246,13 @@ def run_one(instance_id, effort, rep, phase, model, max_turns, segment_turns,
         if phase in ("static", "fork_branch"):
             seg_idx, prompt_source, session_flag, turns = segments[0]
             out = run_segment(seg_idx, prompt_source, session_flag, turns, timeout_static)
-            if out is None and phase == "fork_branch" and row["status"] == "error":
+            if (out is None and phase == "fork_branch" and row["status"] == "error"
+                    and row["num_turns"] == 0 and row["cost_usd"] == 0):
                 # Transient empty-output failures observed when two branches
                 # fork the same parent session simultaneously (session-dir
-                # locks). Retry once with a fresh child session id.
+                # locks). Retry once with a fresh child session id — but ONLY
+                # when attempt 1 did zero work, so the retry cannot inherit a
+                # mutated filesystem or unrecorded spend.
                 row["status"] = "ok"
                 time.sleep(5)
                 session_flag = ["-r", resume_session["session_id"],
@@ -303,17 +307,25 @@ def run_one(instance_id, effort, rep, phase, model, max_turns, segment_turns,
                     # design flaw): sessions are append-only and --fork-session
                     # copies the whole history at fork time.
                     ckpt_sid = str(uuid.uuid4())
-                    marker = ctr.grok(
-                        grok_headless_args(
-                            effort, model, 1,
-                            ["-r", sid, "--fork-session", "-s", ckpt_sid],
-                            ["-p", "Checkpoint marker. Reply with exactly: OK"],
-                        ),
-                        timeout=600,
-                    )
-                    mk = parse_grok_json(marker.stdout)
+                    try:
+                        marker = ctr.grok(
+                            grok_headless_args(
+                                effort, model, 1,
+                                ["-r", sid, "--fork-session", "-s", ckpt_sid],
+                                ["-p", "Checkpoint marker. Reply with exactly: OK. "
+                                       "Do not use any tools."],
+                            ) + ["--tools", "read_file"],  # no mutating tools possible
+                            timeout=600,
+                        )
+                        mk = parse_grok_json(marker.stdout)
+                    except subprocess.TimeoutExpired:
+                        mk = None
                     if mk and mk.get("sessionId"):
                         row["snapshots"][-1]["ckpt_session"] = ckpt_sid
+                        row["snapshots"][-1]["marker"] = {
+                            "turns": mk.get("num_turns"),
+                            "text": (mk.get("text") or "")[:40],
+                        }
                     else:
                         row["snapshots"][-1]["ckpt_session"] = None
                         row["usage_flags"].append(f"seg{k}_ckpt_fork_failed")

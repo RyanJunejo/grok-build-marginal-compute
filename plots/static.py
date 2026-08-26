@@ -27,8 +27,11 @@ EFFORT_ORDER = ["low", "medium", "high", "xhigh", "max"]
 
 def load_l1():
     rows = [json.loads(l) for l in (ROOT / "results" / "runs.jsonl").read_text().splitlines() if l.strip()]
+    # A/A appendix: base model ONLY — pooling grok-4.6 rows (which all carry
+    # effort='medium') into an "effort" comparison would fabricate an effect.
     return [r for r in rows if r.get("layer") == "L1" and r["phase"] == "fork_source"
-            and r["status"] == "ok" and r.get("resolved") is not None]
+            and r["status"] == "ok" and r.get("resolved") is not None
+            and r.get("model") == "grok-build-0.1"]
 
 
 def arm_of(r):
