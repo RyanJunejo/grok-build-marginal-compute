@@ -1,0 +1,36 @@
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 306e5f217..c893893d8 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -639,12 +639,16 @@ class Package(Module):
+         return path in self.session._initialpaths
+ 
+     def collect(self):
+-        self._mount_obj_if_needed()
+         this_path = self.fspath.dirpath()
+         init_module = this_path.join("__init__.py")
++        # Import __init__.py only when this package actually contributes tests.
++        # Otherwise collection would import unrelated packages (#6194).
++        collected_any = False
+         if init_module.check(file=1) and path_matches_patterns(
+             init_module, self.config.getini("python_files")
+         ):
++            self._mount_obj_if_needed()
++            collected_any = True
+             yield Module(init_module, self)
+         pkg_prefixes = set()
+         for path in this_path.visit(rec=self._recurse, bf=True, sort=True):
+@@ -662,7 +666,12 @@ class Package(Module):
+                 continue
+ 
+             if is_file:
+-                yield from self._collectfile(path)
++                for x in self._collectfile(path):
++                    if not collected_any:
++                        # Load package-level marks (e.g. pytestmark) before tests run.
++                        self._mount_obj_if_needed()
++                        collected_any = True
++                    yield x
+             elif not path.isdir():
+                 # Broken symlink or invalid/missing file.
+                 continue

@@ -61,7 +61,7 @@ branches, all v2 design):
   i.e. ≈ **347k total tokens per marginal verified solve** — the measured price of rescuing a
   failing trajectory.
 - Task-level anchors: grok-build-0.1 74% @ $0.28/task (perfectly deterministic per task across
-  3-4 reps); grok-4.6 100% @ $0.51 (and *fewer* total tokens — 651k vs 944k — the premium is
+  4-6 reps); grok-4.6 100% @ $0.51 (and *fewer* total tokens — 651k vs 944k — the premium is
   price-per-token, not volume); per-task-best selection 100% @ $0.36 (−30% vs always-escalate).
 
 Caveats stated plainly: n is small; checkpoints nest within 8 source trajectories (up to 3 per
