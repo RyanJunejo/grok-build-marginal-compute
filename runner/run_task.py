@@ -271,8 +271,17 @@ def run_one(instance_id, effort, rep, phase, model, max_turns, segment_turns,
                 if out is None or row["status"] != "ok":
                     break
                 if snapshots:
-                    snap = ctr.commit(f"snap_{run_id.split('__')[-1]}:seg{k}")
-                    row["snapshots"].append({"segment": k, "image": snap})
+                    tag = f"snap_{run_id.split('__')[-1]}:seg{k}"
+                    for attempt in (1, 2):
+                        try:
+                            ctr.commit(tag)
+                            row["snapshots"].append({"segment": k, "image": tag})
+                            break
+                        except subprocess.CalledProcessError:
+                            if attempt == 2:  # snapshot lost; run stays valid for L1
+                                row["usage_flags"].append(f"seg{k}_snapshot_failed")
+                            else:
+                                time.sleep(10)
                 # Observed on 1.0.5: a --max-turns stop reports stopReason
                 # "cancelled" (not the documented "max_turn_requests"); both
                 # mean "budget exhausted, keep segmenting".
