@@ -38,6 +38,15 @@ EXEC_CMD_RE = re.compile(
 EDIT_NAME_RE = re.compile(r"(search_replace|edit|write|create_file|apply_patch|str_replace|delete)", re.I)
 
 
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def localize(path):
+    """Rows produced on the experiment VM carry /root/fastmodel paths; remap
+    them to this checkout so analysis runs anywhere the results are synced."""
+    return path.replace("/root/fastmodel", str(ROOT)) if path else path
+
+
 def _tool_meta(update):
     return (update.get("_meta") or {}).get("x.ai/tool") or {}
 
@@ -185,7 +194,8 @@ def state_at_segments(row):
     failed, OR >=2 edits landed on one file within this segment with no passing
     test run inside the segment.
     """
-    if not row.get("updates_path") or not Path(row["updates_path"]).exists():
+    upath = localize(row.get("updates_path"))
+    if not upath or not Path(upath).exists():
         return []
     states = []
     prev_count = 0
@@ -193,7 +203,7 @@ def state_at_segments(row):
         upto = seg.get("updates_bytes")
         if upto is None:
             continue
-        cum_events = extract_events(row["updates_path"], upto)
+        cum_events = extract_events(upath, upto)
         cum = _summarize(cum_events)
         seg_events = cum_events[prev_count:]
         win = _summarize(seg_events)

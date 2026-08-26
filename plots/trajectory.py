@@ -77,15 +77,14 @@ def main():
     ys = [0] + [s.get("output_tokens_cum") or 0 for s in segs]
 
     fig, ax = plt.subplots(figsize=(9.5, 5))
-    ax.plot(xs, ys, color="#555", lw=2, label=f"source ({src['effort']})", zorder=2)
+    ax.plot(xs, ys, color="#555", lw=2, label=f"source ({src['model']})", zorder=2)
 
     # verification marks, placed within their segment proportionally
-    evs = features.extract_events(src["updates_path"])
+    upath = features.localize(src["updates_path"])
     seg_bounds = [(s["segment"], s.get("updates_bytes")) for s in segs]
     prev_n = 0
-    prev_bytes = 0
     for seg_i, upto in seg_bounds:
-        seg_evs = features.extract_events(src["updates_path"], upto)[prev_n:]
+        seg_evs = features.extract_events(upath, upto)[prev_n:]
         for j, ev in enumerate(seg_evs):
             if features._is_verification(ev):
                 frac = (j + 1) / (len(seg_evs) + 1)
@@ -96,7 +95,6 @@ def main():
                 else:
                     ax.scatter([x], [y], marker="o", s=45, color="#27ae60", zorder=3)
         prev_n += len(seg_evs)
-        prev_bytes = upto
 
     fork_x = fork_seg * 8
     fork_y = ys[fork_seg]
@@ -134,7 +132,7 @@ def main():
     ax.set_xlabel("agent turns")
     ax.set_ylabel("cumulative output+reasoning tokens")
     ax.set_title(
-        f"{ck['task_id']} — same state, two efforts "
+        f"{ck['task_id']} — same state, continue vs escalate "
         f"(paired counterfactual branches; intra-segment marks approximate)",
         fontsize=10)
     ax.legend(fontsize=8, loc="upper left")

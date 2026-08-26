@@ -43,9 +43,36 @@ With effort dead, the real escalation lever is the model. Design:
    containers). Estimand: **Δ(state) = P(solve | state, escalate) − P(solve | state, continue)**,
    with bootstrap CIs over checkpoints, split by state group, alongside the token/cost premium.
 
-**Results:** [pending — populated from `plots/marginal.py` when the branch batch completes]
-— see `plots/marginal.png`, `plots/trajectory_*.png`, and `plots/static.png` (task-level
-baselines: all-continue vs all-escalate vs per-task oracle).
+**Results** (13 checkpoints — 4 signal / 9 quiet — across 8 tasks, 2 reps/arm, 50 graded
+branches, all v2 design):
+
+- **Escalation raised P(solve) by ≈ +0.4 and never lowered it at any checkpoint**:
+  Δsolve = **+0.38** [0.00, +0.75] at signal states (n=4) and **+0.39** [+0.11, +0.67] at quiet
+  states (n=9), bootstrap CIs over checkpoints.
+- **Mid-flight hand-off rescues trajectories the base model can never finish.** On
+  django-11400 (0/6 for grok-build-0.1 from scratch), escalate branches solved **2/2 from a
+  quiet state and 2/2 from a deep failure state** where continue went 0/2; pytest-6197
+  (also 0/6 from scratch) was rescued 2/2 from its mid-trajectory checkpoint. The exception:
+  its last checkpoint (8 turns of budget left) failed at both arms — escalating too late buys
+  nothing.
+- **The cost of escalation is two-sided.** At quiet states the mean token premium was
+  **−86k total tokens** — escalation *saved* tokens net, because grok-4.6 finishes and stops
+  while grok-build-0.1 burns its whole budget. At signal states the premium was +130k,
+  i.e. ≈ **347k total tokens per marginal verified solve** — the measured price of rescuing a
+  failing trajectory.
+- Task-level anchors: grok-build-0.1 74% @ $0.28/task (perfectly deterministic per task across
+  3-4 reps); grok-4.6 100% @ $0.51 (and *fewer* total tokens — 651k vs 944k — the premium is
+  price-per-token, not volume); per-task-best selection 100% @ $0.36 (−30% vs always-escalate).
+
+Caveats stated plainly: n is small; checkpoints nest within 8 source trajectories (up to 3 per
+trajectory), so CIs over checkpoints understate cluster correlation; signal-vs-quiet
+*difference* is not established (both ≈ +0.38); and "escalate mid-flight vs restart the task
+fresh on grok-4.6" is a separate comparison this design does not measure (grok-4.6 from scratch
+also solves these tasks — what the forks add is the state-conditioned, budget-matched
+measurement, including where escalation is too late).
+
+See `plots/marginal.png` (Δ by state), `plots/trajectory_django__django-11400__seg4_*.png`
+(one rescue, drawn), and `plots/static_models.png` (task-level cost/solve + oracle gap).
 
 ## Pinned configuration
 

@@ -1,0 +1,21 @@
+experiment arms: continue vs escalate (delta = P(escalate) - P(continue))
+
+checkpoint                                                 grp    P(med)  P(xh)      Δ       Δtok
+django__django-10914__seg2__4ccb3b7b                       quiet    1.00   1.00  +0.00    +49,232
+django__django-11400__seg2__e047d153                       quiet    0.00   1.00  +1.00   -160,880
+django__django-11999__seg3__8718029c                       quiet    1.00   1.00  +0.00   -106,060
+django__django-13590__seg1__fd0adbe0                       quiet    1.00   1.00  +0.00   -255,446
+psf__requests-1921__seg1__a7fa4c6f                         quiet    0.00   1.00  +1.00    +66,935
+psf__requests-1921__seg2__c9573fca                         quiet    1.00   1.00  +0.00   -244,345
+pytest-dev__pytest-6197__seg2__d2ef7f40                    quiet    0.00   1.00  +1.00   +350,344
+sphinx-doc__sphinx-8551__seg1__8b9ccee4                    quiet    0.50   1.00  +0.50   -145,456
+sympy__sympy-20590__seg1__6be6126a                         quiet    1.00   1.00  +0.00   -332,089
+django__django-11400__seg4__e047d153                       signal   0.00   1.00  +1.00    +71,704
+django__django-11999__seg4__8718029c                       signal   1.00   1.00  +0.00    +95,505
+pytest-dev__pytest-6197__seg3__d2ef7f40                    signal   0.00   0.50  +0.50   +278,840
+pytest-dev__pytest-6197__seg4__d2ef7f40                    signal   0.00   0.00  +0.00    +74,883
+
+signal n= 4  Δsolve=+0.38 [+0.00,+0.75]  token premium=+130,233 total (-8,750 out+reasoning)  -> 347,287 total tok per marginal solve
+quiet  n= 9  Δsolve=+0.39 [+0.11,+0.67]  token premium=-86,418 total (-13,278 out+reasoning)  -> -222,219 total tok per marginal solve
+
+wrote /root/fastmodel/plots/marginal.png

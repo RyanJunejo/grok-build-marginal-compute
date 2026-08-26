@@ -1,0 +1,17 @@
+arm                n  solve   tok/task  $/task
+grok-build-0.1    31    74%    944,438    0.28
+grok-4.6           8   100%    651,532    0.51
+per-task-best*     8   100%    919,859    0.36
+* oracle selection conditions on outcomes; motivation only
+
+per-task (fraction of runs solved):
+  django__django-10914                        4/4     1/1
+  django__django-11400                        0/4     1/1
+  django__django-11999                        4/4     1/1
+  django__django-13590                        4/4     1/1
+  psf__requests-1921                          4/4     1/1
+  pytest-dev__pytest-6197                     0/4     1/1
+  sphinx-doc__sphinx-8551                     3/3     1/1
+  sympy__sympy-20590                          4/4     1/1
+
+wrote /root/fastmodel/plots/static_models.png
